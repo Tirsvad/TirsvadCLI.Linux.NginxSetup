@@ -1,0 +1,3 @@
+[submodule "src/NginxSetup/vendor/Linux.Distribution"]
+	path = src/NginxSetup/vendor/Linux.Distribution
+	url = git@github.com:TirsvadCLI/Linux.Distribution.git

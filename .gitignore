@@ -1,0 +1,6 @@
+[Tt]emp/
+[Ll]og/
+src/ServerSetup/conf/letsencrypt/*/
+conf/settings.sh
+
+*.old
