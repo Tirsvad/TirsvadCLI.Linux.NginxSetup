@@ -3,7 +3,7 @@ TCLI_NGINXSETUP_DIR="$(dirname "$(realpath "${BASH_SOURCE}")")"
 . $TCLI_NGINXSETUP_DIR/inc/shared.sh
 
 [ -d ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available
-[ -d ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_WWW_BASE_PATH ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_WWW_BASE_PATH
+[ -d ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_PATH_WWW_BASE ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_PATH_WWW_BASE
 . $TCLI_NGINXSETUP_DIR/vendor/Linux.Distribution/src/Distribution/distribution.sh
 
 ################################################################################
@@ -51,7 +51,6 @@ tcli_nginxsetup_install() {
 	# 	shift
 	# done
 	tcli_packageManager_install "nginx"
-	# ssh -p 10233 root@161.97.108.95 systemctl enable nginx.service
 	tcli_nginxsetup_remote_cmd systemctl enable nginx.service
 	tcli_nginxsetup_remote_cmd systemctl start nginx.service
 }
@@ -69,7 +68,7 @@ tcli_nginxsetup_add_domain() {
 		tcli_nginxsetup_lookup_domain $domain
 		cp $TCLI_NGINXSETUP_PATH_CONF/nginx/sites-available/server.default $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
 		sed -i -e "s/<NGINX_DOMAIN_NAMES>/$domain/g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
-		sed -i "s|<NGINXSETUP_WWW_BASE_PATH>|$TCLI_NGINXSETUP_WWW_BASE_PATH|g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
+		sed -i "s|<NGINXSETUP_WWW_BASE_PATH>|$TCLI_NGINXSETUP_PATH_WWW_BASE|g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
 		if [ $TCLI_NGINXSETUP_REMOTE_SET ]; then
 			# copy files to server and preserve newlines
 			tar -C $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/ -cf - $domain \
@@ -83,7 +82,7 @@ tcli_nginxsetup_add_domain() {
 			#TODO
 			echo "\n\nDEFAULT_HTML $DEFAULT_HTML"
 		else
-			mkdir -p $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_WWW_BASE_PATH$domain/html
+			mkdir -p $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html
 			cp $TCLI_NGINXSETUP_DIR/conf/nginx/default.html $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/index.html
 			sed -i -e "s/NGINX_DOMAIN_NAMES/$domain/g" $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/index.html
 			tcli_nginxsetup_remote_cmd "mkdir -p $TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/"
