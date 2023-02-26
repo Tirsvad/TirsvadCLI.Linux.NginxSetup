@@ -70,10 +70,12 @@ tcli_nginxsetup_add_domain() {
 		sed -i -e "s/<NGINX_DOMAIN_NAMES>/$domain/g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
 		sed -i "s|<NGINXSETUP_WWW_BASE_PATH>|$TCLI_NGINXSETUP_PATH_WWW_BASE|g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
 		if [ $TCLI_NGINXSETUP_REMOTE_SET ]; then
-			# copy files to server and preserve newlines
-			tar -C $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/ -cf - $domain \
-			| tcli_nginxsetup_remote_cmd tar --no-same-owner -C $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE -xvf -
-			tcli_nginxsetup_remote_cmd "cd $TCLI_NGINXSETUP_PATH_SITES_ENABLED && ln -s $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE$domain"
+			if ! tcli_nginxsetup_remote_cmd "ls $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain"; then
+				# copy files to server and preserve newlines
+				tar -C $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/ -cf - $domain \
+				| tcli_nginxsetup_remote_cmd tar --no-same-owner -C $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE -xvf -
+				tcli_nginxsetup_remote_cmd "cd $TCLI_NGINXSETUP_PATH_SITES_ENABLED && ln -s $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE$domain"
+			fi
 		else
 			cp $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE$domain
 			cd $TCLI_NGINXSETUP_PATH_SITES_ENABLED && ln -s $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE/$domain
