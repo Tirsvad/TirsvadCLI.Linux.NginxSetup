@@ -1,10 +1,15 @@
 #!/bin/bash
-TCLI_NGINXSETUP_DIR="$(dirname "$(realpath "${BASH_SOURCE}")")" 
-. $TCLI_NGINXSETUP_DIR/inc/shared.sh
 
-[ -d ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available
-[ -d ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_PATH_WWW_BASE ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_PATH_WWW_BASE
+declare TCLI_NGINXSETUP_DIR="$(dirname "$(realpath "${BASH_SOURCE}")")"
+declare TCLI_NGINXSETUP_PATH_INC=${TCLI_NGINXSETUP_DIR}/inc
+. ${TCLI_NGINXSETUP_PATH_INC}/shared.sh
 . $TCLI_NGINXSETUP_DIR/vendor/Linux.Distribution/src/Distribution/distribution.sh
+
+
+tcli_nginxsetup_init() {
+	[ -d ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available
+	[ -d ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_PATH_WWW_BASE ] || mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}/$TCLI_NGINXSETUP_PATH_WWW_BASE
+}
 
 ################################################################################
 # Remote setup if using ssh
@@ -34,8 +39,8 @@ tcli_nginxsetup_remote_cmd() {
 ################################################################################
 tcli_nginxsetup_prepare() {
 	# Get requiered tools
-	tcli_packageManager_install "certbot"
-	tcli_packageManager_install "python3-certbot-nginx"
+	tcli_packageManager_install certbot
+	tcli_packageManager_install python3-certbot-nginx
 }
 
 ################################################################################
@@ -46,11 +51,7 @@ tcli_nginxsetup_prepare() {
 ################################################################################
 tcli_nginxsetup_install() {
 	tcli_nginxsetup_prepare
-	# for arg in "$@"; do
-	# 	[ arg=="nocertbot" ] && local certbot=1
-	# 	shift
-	# done
-	tcli_packageManager_install "nginx"
+	tcli_packageManager_install nginx
 	tcli_nginxsetup_remote_cmd systemctl enable nginx.service
 	tcli_nginxsetup_remote_cmd systemctl start nginx.service
 }
@@ -59,42 +60,61 @@ tcli_nginxsetup_install() {
 # Add domian name and create default site with ssl
 ################################################################################
 # Params
-#   <hostnames>
+#   <hostname>
+#		<root>
+# 	<siteType>
+# 	<confFile> which nginx conf file. Default server.default
 ################################################################################
 tcli_nginxsetup_add_domain() {
-	declare domain=${1:-}
-	declare webhostType=${2:-}
-	for domain in $( echo "$1" | xargs -n1 ); do
-		tcli_nginxsetup_lookup_domain $domain
-		cp $TCLI_NGINXSETUP_PATH_CONF/nginx/sites-available/server.default $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
-		sed -i -e "s/<NGINX_DOMAIN_NAMES>/$domain/g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
-		sed -i "s|<NGINXSETUP_WWW_BASE_PATH>|$TCLI_NGINXSETUP_PATH_WWW_BASE|g" $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain
-		if [ $TCLI_NGINXSETUP_REMOTE_SET ]; then
-			if ! tcli_nginxsetup_remote_cmd "ls $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain"; then
-				# copy files to server and preserve newlines
-				tar -C $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/ -cf - $domain \
-				| tcli_nginxsetup_remote_cmd tar --no-same-owner -C $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE -xvf -
-				tcli_nginxsetup_remote_cmd "cd $TCLI_NGINXSETUP_PATH_SITES_ENABLED && ln -s $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE$domain"
+	local _domain=${1:-}
+	local _wwwBaseRoot=${2:-}
+	local _type=${3:-html}
+	local _confFile=${4:-}
+	case "$3" in
+		"html" | "")
+			[ -z "$_wwwBaseRoot" ] && _wwwBaseRoot=${TCLI_NGINXSETUP_PATH_WWW_BASE}/${_domain}/public/html
+			[ -z "$_confFile" ] && _confFile="${TCLI_NGINXSETUP_PATH_CONF}/nginx/sites-available/server.default"
+			mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}${_wwwBaseRoot}
+			tcli_nginxsetup_remote_cmd "mkdir -p ${_wwwBaseRoot}"
+			[ -f $_confFile ] || infoscreenFailedExit "custom website conf file '" "${_domain}" "' does not exist"
+			printf "adding ${_domain} to nginx with document root at as ${_wwwBaseRoot} with file ${_confFile}"
+			tcli_nginxsetup_lookup_domain $_domain
+			cp "${_confFile}" "${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available/${_domain}"
+			sed -i -e "s/<NGINX_DOMAIN_NAMES>/${_domain}/g" ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available/${_domain}
+			sed -i "s|<NGINXSETUP_WWW_BASE_PATH>|${_wwwBaseRoot}|g" ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available/${_domain}
+			if [ $TCLI_NGINXSETUP_REMOTE_SET ]; then
+				if [ ! -d ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available/$_domain ]; then
+					if [ ! $(tcli_nginxsetup_remote_cmd "ls /etc/nginx/sites-available/$_domain > /dev/null") ]; then
+						# copy files to server and preserve newlines
+						tar -C $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/ -cf - $_domain \
+						| tcli_nginxsetup_remote_cmd tar --no-same-owner -C $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE -xvf -
+						tcli_nginxsetup_remote_cmd "cd $TCLI_NGINXSETUP_PATH_SITES_ENABLED && ln -s $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE/$_domain"
+					else
+						printf "tcli_nginxsetup_add_domain: domain conf file exist allready at server. We will not owerwrite." "/etc/nginx/sites-available/$_domain"
+						infoscreenwarn
+					fi
+				fi
+			else
+				cp ${TCLI_NGINXSETUP_PATH_TEMP}/etc/nginx/sites-available/${_domain} ${TCLI_NGINXSETUP_PATH_SITES_AVAILABLE}/${_domain}
+				cd ${TCLI_NGINXSETUP_PATH_SITES_ENABLED} && ln -s ${TCLI_NGINXSETUP_PATH_SITES_AVAILABLE}/${_domain}
 			fi
-		else
-			cp $TCLI_NGINXSETUP_PATH_TEMP/etc/nginx/sites-available/$domain $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE$domain
-			cd $TCLI_NGINXSETUP_PATH_SITES_ENABLED && ln -s $TCLI_NGINXSETUP_PATH_SITES_AVAILABLE/$domain
-		fi
-		if [ ${DEFAULT_HTML:-} ]; then
-			#TODO
-			echo "\n\nDEFAULT_HTML $DEFAULT_HTML"
-		else
-			mkdir -p $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html
-			cp $TCLI_NGINXSETUP_DIR/conf/nginx/default.html $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/index.html
-			sed -i -e "s/NGINX_DOMAIN_NAMES/$domain/g" $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/index.html
-			tcli_nginxsetup_remote_cmd "mkdir -p $TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/"
-			tar -C $TCLI_NGINXSETUP_PATH_TEMP$TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/ -cf - \
-  		index.html | 
-  		tcli_nginxsetup_remote_cmd tar --no-same-owner -C $TCLI_NGINXSETUP_PATH_WWW_BASE$domain/html/ -xvf -
-		fi
-		printf "\n$domain finished setup\n" 
-		tcli_nginxsetup_remote_cmd "systemctl reload nginx"
-	done
+			## @todo create custom html file here
+			mkdir -p ${TCLI_NGINXSETUP_PATH_TEMP}${_wwwBaseRoot}
+			cp ${TCLI_NGINXSETUP_DIR}/conf/nginx/default.html ${TCLI_NGINXSETUP_PATH_TEMP}${_wwwBaseRoot}/index.html
+			sed -i -e "s/NGINX_DOMAIN_NAMES/$_domain/g" ${TCLI_NGINXSETUP_PATH_TEMP}${_wwwBaseRoot}/index.html
+			tar -C "${TCLI_NGINXSETUP_PATH_TEMP}${_wwwBaseRoot}/" -cf - index.html | 
+			tcli_nginxsetup_remote_cmd tar --no-same-owner -C ${_wwwBaseRoot}/ -xvf -
+			;;
+		postfixAdmin)
+			[ -z "$_wwwBaseRoot" ] && _wwwBaseRoot=${TCLI_NGINXSETUP_PATH_WWW_BASE}/${_domain}/public/html
+		;;
+		*)
+			infoscreenwarn
+			printf "tcli_nginxsetup_add_domain: unknown website type '${3}'"
+			;;
+	esac
+	printf "\n$domain finished setup\n" 
+	tcli_nginxsetup_remote_cmd "systemctl reload nginx"
 }
 
 ################################################################################

@@ -1,12 +1,4 @@
 #!/bin/bash
 
-. "$(dirname "$(realpath "${BASH_SOURCE}")")"/errorMessages.sh
+declare TCLI_NGINXSETUP_PATH_CONF=${TCLI_NGINXSETUP_DIR}/conf
 
-fail() {
-	printf '%s\n' "$1" >&2 ## Send message to stderr.
-	exit "${2-1}" ## Return a code specified by $2, or 1 by default.
-}
-
-warning() {
-	printf '%s\n' "$1" >&2 ## Send message to stderr.
-}
